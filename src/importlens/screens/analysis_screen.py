@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import sys
+
 from textual.app import ComposeResult
 from textual.containers import Container
 from textual.reactive import reactive
@@ -10,6 +12,8 @@ from textual.widgets import Footer, Input, Static
 from importlens.parser import Import
 from importlens.widgets.import_tree import ImportTree
 
+_STDLIB_NAMES = sys.stdlib_module_names
+
 SORT_CYCLE = ["default", "self", "cumul", "name"]
 SORT_LABELS = {
     "default": "Parse Order",
@@ -17,6 +21,13 @@ SORT_LABELS = {
     "cumul": "Cumulative Time",
     "name": "Name",
 }
+
+
+def _filter_stdlib(imports: list[Import], show: bool) -> list[Import]:
+    """Filter out top-level stdlib imports when show is False."""
+    if show:
+        return imports
+    return [imp for imp in imports if imp.name.split(".")[0] not in _STDLIB_NAMES]
 
 
 def _count_modules(imports: list[Import]) -> int:
@@ -63,24 +74,47 @@ class AnalysisScreen(Screen):
     BINDINGS = [
         ("slash", "toggle_filter", "Filter"),
         ("s", "cycle_sort", "Sort"),
+        ("t", "toggle_stdlib", "Stdlib"),
         ("j", "cursor_down", "Down"),
         ("k", "cursor_up", "Up"),
         ("q", "quit", "Quit"),
     ]
 
-    sort_key: reactive[str] = reactive("default")
-    filter_text: reactive[str] = reactive("")
+    sort_key: reactive[str] = reactive("default", init=False)
+    filter_text: reactive[str] = reactive("", init=False)
+    show_stdlib: reactive[bool] = reactive(False, init=False)
 
     def __init__(self, imports: list[Import]) -> None:
         super().__init__()
         self._imports = imports
         self._debounce_timer: Timer | None = None
 
+    def _visible_imports(self) -> list[Import]:
+        return _filter_stdlib(self._imports, self.show_stdlib)
+
+    def _rebuild_tree(self) -> None:
+        try:
+            tree = self.query_one(ImportTree)
+        except Exception:
+            return
+        tree.populate(self._visible_imports(), self.sort_key, self.filter_text)
+
+    def _update_header(self) -> None:
+        visible = self._visible_imports()
+        count = _count_modules(visible)
+        total = _total_self_us(visible)
+        label = SORT_LABELS.get(self.sort_key, self.sort_key)
+        stdlib_tag = "" if self.show_stdlib else " | Stdlib: hidden"
+        self.query_one("#header-bar", Static).update(
+            f" {count:,} modules | Total: {total:,}µs | Sort: {label}{stdlib_tag}"
+        )
+
     def compose(self) -> ComposeResult:
-        count = _count_modules(self._imports)
-        total = _total_self_us(self._imports)
+        visible = self._visible_imports()
+        count = _count_modules(visible)
+        total = _total_self_us(visible)
         yield Static(
-            f" {count:,} modules | Total: {total:,}µs | Sort: Parse Order",
+            f" {count:,} modules | Total: {total:,}µs | Sort: Parse Order | Stdlib: hidden",
             id="header-bar",
         )
         yield Input(placeholder="Filter modules…", id="filter-bar")
@@ -93,31 +127,19 @@ class AnalysisScreen(Screen):
         tree = self.query_one(ImportTree)
         tree.focus()
         self.call_after_refresh(
-            tree.populate, self._imports, self.sort_key, self.filter_text
+            tree.populate, self._visible_imports(), self.sort_key, self.filter_text
         )
 
-    def _update_header(self) -> None:
-        count = _count_modules(self._imports)
-        total = _total_self_us(self._imports)
-        label = SORT_LABELS.get(self.sort_key, self.sort_key)
-        self.query_one("#header-bar", Static).update(
-            f" {count:,} modules | Total: {total:,}µs | Sort: {label}"
-        )
-
-    def watch_sort_key(self, value: str) -> None:
+    def watch_sort_key(self) -> None:
         self._update_header()
-        try:
-            tree = self.query_one(ImportTree)
-        except Exception:
-            return
-        tree.populate(self._imports, value, self.filter_text)
+        self._rebuild_tree()
 
-    def watch_filter_text(self, value: str) -> None:
-        try:
-            tree = self.query_one(ImportTree)
-        except Exception:
-            return
-        tree.populate(self._imports, self.sort_key, value)
+    def watch_filter_text(self) -> None:
+        self._rebuild_tree()
+
+    def watch_show_stdlib(self) -> None:
+        self._update_header()
+        self._rebuild_tree()
 
     def _schedule_filter(self, value: str) -> None:
         """Debounced filter update."""
@@ -145,6 +167,9 @@ class AnalysisScreen(Screen):
     def action_cycle_sort(self) -> None:
         idx = SORT_CYCLE.index(self.sort_key)
         self.sort_key = SORT_CYCLE[(idx + 1) % len(SORT_CYCLE)]
+
+    def action_toggle_stdlib(self) -> None:
+        self.show_stdlib = not self.show_stdlib
 
     def action_cursor_down(self) -> None:
         self.query_one(ImportTree).action_cursor_down()

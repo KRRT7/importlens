@@ -24,6 +24,8 @@ class _NodeData(NamedTuple):
     color: str
     name_w: int
     bar: str
+    depth: int
+    import_children: list[Import]
 
 
 def _heat_color(ratio: float) -> str:
@@ -99,6 +101,8 @@ def _make_node_data(
         color=color,
         name_w=name_w,
         bar=bar,
+        depth=depth,
+        import_children=imp.children,
     )
 
 
@@ -110,6 +114,7 @@ class ImportTree(Tree[_NodeData]):
         self.show_root = False
         self._max_self: int = 1
         self._max_name: int = 1
+        self._sort_key: str = "default"
 
     def populate(
         self,
@@ -124,6 +129,7 @@ class ImportTree(Tree[_NodeData]):
         )
         self._max_self = max(self._max_self, 1)
         self._max_name = max(self._max_name, 1)
+        self._sort_key = sort_key
 
         self.clear()
         self._add_level(self.root, filtered, sort_key, depth=0, expand=True)
@@ -141,9 +147,30 @@ class ImportTree(Tree[_NodeData]):
             data = _make_node_data(imp, depth, self._max_self, self._max_name)
             if imp.children:
                 node = parent.add(imp.name, data=data, expand=expand)
-                self._add_level(node, imp.children, sort_key, depth + 1, expand=False)
+                if expand:
+                    # Pre-load one level deeper for expanded nodes
+                    self._add_level(
+                        node, imp.children, sort_key, depth + 1, expand=False
+                    )
             else:
                 parent.add_leaf(imp.name, data=data)
+
+    def _on_tree_node_expanded(self, event: Tree.NodeExpanded[_NodeData]) -> None:
+        """Lazily populate children when a node is expanded for the first time."""
+        node = event.node
+        data = node.data
+        if data is None or not data.import_children:
+            return
+        # Already populated — children exist as TreeNodes
+        if node.children:
+            return
+        self._add_level(
+            node,
+            data.import_children,
+            self._sort_key,
+            data.depth + 1,
+            expand=False,
+        )
 
     def render_label(
         self, node: TreeNode[_NodeData], base_style: Style, style: Style
