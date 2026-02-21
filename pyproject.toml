@@ -1,0 +1,16 @@
+[project]
+name = "importlens"
+version = "0.1.0"
+description = "Visualize python -X importtime output in a TUI"
+readme = "README.md"
+authors = [
+    { name = "Kevin Turcios", email = "turcioskevinr@gmail.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "rich>=14.0.0",
+]
+
+[build-system]
+requires = ["uv_build>=0.10.4,<0.11.0"]
+build-backend = "uv_build"
