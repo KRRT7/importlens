@@ -10,7 +10,7 @@ from textual.timer import Timer
 from textual.widgets import Footer, Input, Static
 
 from importlens.parser import Import
-from importlens.widgets.import_tree import ImportTree
+from importlens.widgets.import_tree import ImportTree, build_column_header
 
 _STDLIB_NAMES = sys.stdlib_module_names
 
@@ -66,6 +66,10 @@ class AnalysisScreen(Screen):
         height: 1fr;
         align: center top;
     }
+    #column-header {
+        width: 85%;
+        height: 1;
+    }
     ImportTree {
         width: 85%;
     }
@@ -98,6 +102,9 @@ class AnalysisScreen(Screen):
         except Exception:
             return
         tree.populate(self._visible_imports(), self.sort_key, self.filter_text)
+        self.query_one("#column-header", Static).update(
+            build_column_header(tree._max_name)
+        )
 
     def _update_header(self) -> None:
         visible = self._visible_imports()
@@ -119,16 +126,22 @@ class AnalysisScreen(Screen):
         )
         yield Input(placeholder="Filter modules…", id="filter-bar")
         with Container(id="tree-wrap"):
+            yield Static(id="column-header")
             yield ImportTree()
         yield Footer()
+
+    def _initial_populate(self) -> None:
+        tree = self.query_one(ImportTree)
+        tree.populate(self._visible_imports(), self.sort_key, self.filter_text)
+        self.query_one("#column-header", Static).update(
+            build_column_header(tree._max_name)
+        )
 
     def on_mount(self) -> None:
         self.query_one("#filter-bar", Input).display = False
         tree = self.query_one(ImportTree)
         tree.focus()
-        self.call_after_refresh(
-            tree.populate, self._visible_imports(), self.sort_key, self.filter_text
-        )
+        self.call_after_refresh(self._initial_populate)
 
     def watch_sort_key(self) -> None:
         self._update_header()

@@ -106,6 +106,19 @@ def _make_node_data(
     )
 
 
+def build_column_header(max_name: int) -> Text:
+    """Build a column header line matching the tree row layout."""
+    # +2 for the expand icon prefix, name column padded to match depth=0
+    name_w = max(1, max_name + 2)
+    return Text.assemble(
+        Text(f"  {'Module':<{name_w}s}", style=Style(bold=True, dim=True)),
+        Text(f"{'Self (µs)':>12s}", style=Style(bold=True, dim=True)),
+        Text("  │ ", style=Style(dim=True)),
+        Text(f"{'Cumul (µs)':>12s}", style=Style(bold=True, dim=True)),
+        Text(f"  {'Bar'}", style=Style(bold=True, dim=True)),
+    )
+
+
 class ImportTree(Tree[_NodeData]):
     """Tree widget displaying import timing data with color-coded bars."""
 
