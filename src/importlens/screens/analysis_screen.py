@@ -10,7 +10,11 @@ from textual.timer import Timer
 from textual.widgets import Footer, Input, Static
 
 from importlens.parser import Import
-from importlens.widgets.import_tree import ImportTree, build_column_header
+from importlens.widgets.import_tree import (
+    ImportTree,
+    _filter_tree,
+    build_column_header,
+)
 
 _STDLIB_NAMES = sys.stdlib_module_names
 
@@ -50,6 +54,14 @@ def _total_self_us(imports: list[Import]) -> int:
     return total
 
 
+def _flatten_all(imp: Import) -> list[tuple[str, int, int]]:
+    """Flatten an import and all its descendants."""
+    result: list[tuple[str, int, int]] = [(imp.name, imp.self_us, imp.cumul_us)]
+    for child in imp.children:
+        result.extend(_flatten_all(child))
+    return result
+
+
 class AnalysisScreen(Screen):
     """Main analysis screen with tree view, filter, and sort."""
 
@@ -81,10 +93,11 @@ class AnalysisScreen(Screen):
         ("t", "toggle_stdlib", "Stdlib"),
         ("j", "cursor_down", "Down"),
         ("k", "cursor_up", "Up"),
+        ("e", "export", "Export"),
         ("q", "quit", "Quit"),
     ]
 
-    sort_key: reactive[str] = reactive("default", init=False)
+    sort_key: reactive[str] = reactive("self", init=False)
     filter_text: reactive[str] = reactive("", init=False)
     show_stdlib: reactive[bool] = reactive(False, init=False)
 
@@ -117,13 +130,7 @@ class AnalysisScreen(Screen):
         )
 
     def compose(self) -> ComposeResult:
-        visible = self._visible_imports()
-        count = _count_modules(visible)
-        total = _total_self_us(visible)
-        yield Static(
-            f" {count:,} modules | Total: {total:,}µs | Sort: Parse Order | Stdlib: hidden",
-            id="header-bar",
-        )
+        yield Static(id="header-bar")
         yield Input(placeholder="Filter modules…", id="filter-bar")
         with Container(id="tree-wrap"):
             yield Static(id="column-header")
@@ -131,6 +138,7 @@ class AnalysisScreen(Screen):
         yield Footer()
 
     def _initial_populate(self) -> None:
+        self._update_header()
         tree = self.query_one(ImportTree)
         tree.populate(self._visible_imports(), self.sort_key, self.filter_text)
         self.query_one("#column-header", Static).update(
@@ -180,6 +188,35 @@ class AnalysisScreen(Screen):
     def action_cycle_sort(self) -> None:
         idx = SORT_CYCLE.index(self.sort_key)
         self.sort_key = SORT_CYCLE[(idx + 1) % len(SORT_CYCLE)]
+
+    def action_export(self) -> None:
+        visible = self._visible_imports()
+        filtered = _filter_tree(visible, self.filter_text)
+        rows = []
+        for imp in filtered:
+            rows.extend(_flatten_all(imp))
+        sort_key = self.sort_key
+        if sort_key == "self":
+            rows.sort(key=lambda r: r[1], reverse=True)
+        elif sort_key == "cumul":
+            rows.sort(key=lambda r: r[2], reverse=True)
+        elif sort_key == "name":
+            rows.sort(key=lambda r: r[0])
+        count = len(rows)
+        total = sum(r[1] for r in rows)
+        lines = [
+            f"# Import Time Analysis",
+            f"",
+            f"{count:,} modules | Total self time: {total:,}µs",
+            f"",
+            f"| Module | Self (µs) | Cumul (µs) |",
+            f"|--------|----------:|----------:|",
+        ]
+        for name, self_us, cumul_us in rows:
+            lines.append(f"| {name} | {self_us:,} | {cumul_us:,} |")
+        md = "\n".join(lines) + "\n"
+        self.app.copy_to_clipboard(md)
+        self.notify("Copied to clipboard")
 
     def action_toggle_stdlib(self) -> None:
         self.show_stdlib = not self.show_stdlib
