@@ -30,3 +30,6 @@ module-root = "src"
 tests-root = "tests"
 ignore-paths = []
 formatter-cmds = ["ruff check --exit-zero --fix $file", "ruff format $file"]
+
+[tool.uv.sources]
+codeflash = { path = "../cf_org/codeflash", editable = true }

@@ -132,13 +132,12 @@ wheels = [
 
 [[package]]
 name = "codeflash"
-version = "0.20.1"
-source = { registry = "https://pypi.org/simple" }
+source = { editable = "../cf_org/codeflash" }
 dependencies = [
     { name = "click" },
     { name = "codeflash-benchmark" },
     { name = "coverage" },
-    { name = "crosshair-tool" },
+    { name = "crosshair-tool", marker = "python_full_version < '3.15'" },
     { name = "dill" },
     { name = "filelock" },
     { name = "gitpython" },
@@ -166,22 +165,91 @@ dependencies = [
     { name = "tree-sitter-typescript" },
     { name = "unidiff" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/30/f6/32cc82d8863f6c43b461b27697d3367c9a70d5444ac0741df978acaf89f8/codeflash-0.20.1.tar.gz", hash = "sha256:035934397277ec18860fb9ee81460f96cab11bc1cab4e9b5e16414955f2f2aea", size = 506476, upload-time = "2026-02-18T21:16:25.335Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/1e/6a/31515496e9f45cc59ac2590872d2808439fa65ed3404a99cc0cd2c0d3689/codeflash-0.20.1-py3-none-any.whl", hash = "sha256:23ca9822db8a59b5714cd55a783cfb42d06aa3b866e3e589aba404c085ea4a2a", size = 513091, upload-time = "2026-02-18T21:16:23.652Z" },
+
+[package.metadata]
+requires-dist = [
+    { name = "click", specifier = ">=8.1.0" },
+    { name = "codeflash-benchmark", editable = "../cf_org/codeflash/codeflash-benchmark" },
+    { name = "coverage", specifier = ">=7.6.4" },
+    { name = "crosshair-tool", marker = "python_full_version < '3.15'", specifier = ">=0.0.78" },
+    { name = "dill", specifier = ">=0.3.8" },
+    { name = "filelock", marker = "python_full_version < '3.10'", specifier = "<3.20.3" },
+    { name = "filelock", marker = "python_full_version >= '3.10'", specifier = ">=3.20.3" },
+    { name = "gitpython", specifier = ">=3.1.31" },
+    { name = "humanize", specifier = ">=4.0.0" },
+    { name = "inquirer", specifier = ">=3.0.0" },
+    { name = "isort", specifier = ">=5.11.0" },
+    { name = "jedi", specifier = ">=0.19.1" },
+    { name = "junitparser", specifier = ">=3.1.0" },
+    { name = "libcst", specifier = ">=1.0.1" },
+    { name = "line-profiler", specifier = ">=4.2.0" },
+    { name = "lxml", specifier = ">=5.3.0" },
+    { name = "parameterized", specifier = ">=0.9.0" },
+    { name = "platformdirs", specifier = ">=4.3.7" },
+    { name = "posthog", specifier = ">=3.0.0" },
+    { name = "pydantic", specifier = ">=1.10.1" },
+    { name = "pygls", specifier = ">=2.0.0,<3.0.0" },
+    { name = "pytest", specifier = ">=7.0.0" },
+    { name = "pytest-asyncio", specifier = ">=0.18.0" },
+    { name = "pytest-timeout", specifier = ">=2.1.0" },
+    { name = "rich", specifier = ">=13.8.1" },
+    { name = "sentry-sdk", specifier = ">=1.40.6,<3.0.0" },
+    { name = "tomlkit", specifier = ">=0.11.7" },
+    { name = "tree-sitter", specifier = ">=0.23.0" },
+    { name = "tree-sitter-javascript", specifier = ">=0.23.0" },
+    { name = "tree-sitter-typescript", specifier = ">=0.23.0" },
+    { name = "unidiff", specifier = ">=0.7.4" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "ipython", specifier = ">=8.12.0" },
+    { name = "lxml-stubs", specifier = ">=0.5.1" },
+    { name = "mypy", specifier = ">=1.13" },
+    { name = "pandas-stubs", specifier = ">=2.2.2.240807,<2.2.3.241009" },
+    { name = "prek", specifier = ">=0.2.25" },
+    { name = "ruff", specifier = ">=0.7.0" },
+    { name = "ty", specifier = ">=0.0.14" },
+    { name = "types-cffi", specifier = ">=1.16.0.20240331" },
+    { name = "types-colorama", specifier = ">=0.4.15.20240311" },
+    { name = "types-decorator", specifier = ">=5.1.8.20240310" },
+    { name = "types-gevent", specifier = ">=24.11.0.20241230,<25" },
+    { name = "types-greenlet", specifier = ">=3.1.0.20241221,<4" },
+    { name = "types-jsonschema", specifier = ">=4.23.0.20240813" },
+    { name = "types-openpyxl", specifier = ">=3.1.5.20241020" },
+    { name = "types-pexpect", specifier = ">=4.9.0.20241208,<5" },
+    { name = "types-pygments", specifier = ">=2.18.0.20240506" },
+    { name = "types-python-dateutil", specifier = ">=2.9.0.20241003" },
+    { name = "types-regex", specifier = ">=2024.9.11.20240912" },
+    { name = "types-requests", specifier = ">=2.32.0.20241016" },
+    { name = "types-six", specifier = ">=1.16.21.20241009" },
+    { name = "types-unidiff", specifier = ">=0.7.0.20240505,<0.8" },
+    { name = "uv", specifier = ">=0.9.29" },
+]
+tests = [
+    { name = "black", specifier = ">=25.9.0" },
+    { name = "eval-type-backport" },
+    { name = "jax", specifier = ">=0.4.30" },
+    { name = "numba", specifier = ">=0.60.0" },
+    { name = "numpy", specifier = ">=2.0.2" },
+    { name = "pandas", specifier = ">=2.3.3" },
+    { name = "pyarrow", specifier = ">=15.0.0" },
+    { name = "pyrsistent", specifier = ">=0.20.0" },
+    { name = "scipy", specifier = ">=1.13.1" },
+    { name = "tensorflow", marker = "python_full_version >= '3.10'", specifier = ">=2.20.0" },
+    { name = "torch", specifier = ">=2.8.0" },
+    { name = "xarray", specifier = ">=2024.7.0" },
 ]
 
 [[package]]
 name = "codeflash-benchmark"
-version = "0.3.0"
-source = { registry = "https://pypi.org/simple" }
+source = { editable = "../cf_org/codeflash/codeflash-benchmark" }
 dependencies = [
     { name = "pytest" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/7c/10/4d43fcb71914324efc9e1f88ec88d3abd2a615aaf26d268f26dd29a9bffa/codeflash_benchmark-0.3.0.tar.gz", hash = "sha256:465232854ed64a263c0c4c8d1f919a3a92b82b73487806c45686df89feb62037", size = 4897, upload-time = "2026-02-19T06:36:47.19Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/6b/c4/57dd87630a289d729a8f2f65bd8d8353b9af977c878a4149e0995025eec6/codeflash_benchmark-0.3.0-py3-none-any.whl", hash = "sha256:e69f943d1eb706317139af63231efca52bff4b501566eea48a7ca6fe05756f48", size = 5592, upload-time = "2026-02-19T06:36:46.406Z" },
-]
+
+[package.metadata]
+requires-dist = [{ name = "pytest", specifier = ">=7.0.0,!=8.3.4" }]
 
 [[package]]
 name = "colorama"
@@ -397,7 +465,7 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "codeflash" },
+    { name = "codeflash", editable = "../cf_org/codeflash" },
     { name = "ruff", specifier = ">=0.15.2" },
 ]
 
