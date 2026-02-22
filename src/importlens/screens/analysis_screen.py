@@ -9,9 +9,9 @@ from rich.text import Text
 from textual.app import ComposeResult
 from textual.containers import Container
 from textual.reactive import reactive
-from textual.screen import Screen
+from textual.screen import ModalScreen, Screen
 from textual.timer import Timer
-from textual.widgets import DataTable, Footer, Input, Static
+from textual.widgets import Button, DataTable, Footer, Input, Static
 
 from importlens.parser import Import
 
@@ -19,12 +19,11 @@ _STDLIB_NAMES = sys.stdlib_module_names
 
 MAX_BAR_WIDTH = 10
 
-SORT_CYCLE = ["default", "self", "cumul", "name"]
+SORT_CYCLE = ["default", "self", "cumul"]
 SORT_LABELS = {
     "default": "Parse Order",
     "self": "Self Time",
     "cumul": "Cumulative Time",
-    "name": "Name",
 }
 
 
@@ -90,6 +89,226 @@ def _flatten_all(imp: Import) -> list[tuple[str, int, int]]:
     for child in imp.children:
         result.extend(_flatten_all(child))
     return result
+
+
+def _collect_children(imports: list[Import], module_name: str) -> list[Import]:
+    """Walk the full import tree, find every node matching module_name, collect their direct children."""
+    children: list[Import] = []
+    stack = list(imports)
+    while stack:
+        node = stack.pop()
+        if node.name == module_name:
+            children.extend(node.children)
+        stack.extend(node.children)
+    return children
+
+
+def _render_table_rows(
+    table: DataTable,
+    rows: list[tuple[str, int, int, int]],
+) -> None:
+    """Render aggregated rows into a DataTable (shared by AnalysisScreen and DrillDownScreen)."""
+    max_self = max((r[1] for r in rows), default=1) or 1
+    table.clear(columns=True)
+    table.add_columns("Module", "Self (µs)", "Cumul (µs)", "Imports", "Bar")
+    for name, self_us, cumul_us, count in rows:
+        ratio = self_us / max_self
+        color = _heat_color(ratio)
+        if self_us > 0:
+            log_ratio = math.log1p(self_us) / math.log1p(max_self)
+        else:
+            log_ratio = 0.0
+        bar = "█" * round(log_ratio * MAX_BAR_WIDTH)
+        style = Style(color=color)
+        table.add_row(
+            Text(name, style=style + Style(bold=True)),
+            Text(f"{self_us:>12,}", style=style),
+            Text(f"{cumul_us:>12,}", style=Style(dim=True)),
+            Text(f"{count:>8}", style=Style(dim=True)),
+            Text(bar, style=style),
+        )
+
+
+class DetailModal(ModalScreen[str]):
+    """Modal with Copy / Drill Down / Cancel actions."""
+
+    DEFAULT_CSS = """
+    DetailModal {
+        align: center middle;
+    }
+    #copy-dialog {
+        width: 60;
+        height: auto;
+        padding: 1 2;
+        border: thick $accent;
+        background: $surface;
+    }
+    #copy-info {
+        width: 100%;
+        margin-bottom: 1;
+    }
+    #copy-buttons {
+        width: 100%;
+        height: auto;
+        align: center middle;
+    }
+    #copy-buttons Button {
+        margin: 0 1;
+    }
+    """
+
+    BINDINGS = [
+        ("escape", "cancel", "Cancel"),
+    ]
+
+    def __init__(
+        self,
+        module: str,
+        self_us: int,
+        cumul_us: int,
+        count: int,
+        pct: float,
+        has_children: bool,
+    ) -> None:
+        super().__init__()
+        self._module = module
+        self._self_us = self_us
+        self._cumul_us = cumul_us
+        self._count = count
+        self._pct = pct
+        self._has_children = has_children
+
+    def compose(self) -> ComposeResult:
+        with Container(id="copy-dialog"):
+            yield Static(
+                f"[bold]{self._module}[/]\n\n"
+                f"  Self:   {self._self_us:>12,} µs ({self._pct:.1f}%)\n"
+                f"  Cumul:  {self._cumul_us:>12,} µs\n"
+                f"  Imports: {self._count:>10,}",
+                id="copy-info",
+            )
+            with Container(id="copy-buttons"):
+                yield Button("Copy", variant="primary", id="copy-btn")
+                yield Button(
+                    "Drill Down",
+                    variant="success",
+                    id="drill-btn",
+                    disabled=not self._has_children,
+                )
+                yield Button("Cancel", id="cancel-btn")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "copy-btn":
+            self.dismiss("copy")
+        elif event.button.id == "drill-btn":
+            self.dismiss("drill")
+        else:
+            self.dismiss("cancel")
+
+    def action_cancel(self) -> None:
+        self.dismiss("cancel")
+
+
+class DrillDownScreen(Screen):
+    """Drill-down view showing direct children of a module."""
+
+    DEFAULT_CSS = """
+    #drill-header {
+        text-align: center;
+        width: 100%;
+        padding: 1 0;
+    }
+    #drill-wrap {
+        height: 1fr;
+        align: center top;
+    }
+    #drill-table {
+        width: 85%;
+    }
+    """
+
+    BINDINGS = [
+        ("escape", "pop_screen", "Back"),
+        ("j", "cursor_down", "Down"),
+        ("k", "cursor_up", "Up"),
+    ]
+
+    def __init__(
+        self,
+        module_name: str,
+        children: list[Import],
+        all_imports: list[Import],
+    ) -> None:
+        super().__init__()
+        self._module_name = module_name
+        self._children = children
+        self._all_imports = all_imports
+
+    def compose(self) -> ComposeResult:
+        yield Static(id="drill-header")
+        with Container(id="drill-wrap"):
+            yield DataTable(id="drill-table", cursor_type="row")
+        yield Footer()
+
+    def on_mount(self) -> None:
+        self.query_one("#drill-header", Static).update(
+            f" Children of [bold]{self._module_name}[/] | {len(self._children):,} direct imports"
+        )
+        self._rebuild_table()
+        self.query_one("#drill-table", DataTable).focus()
+
+    def _rebuild_table(self) -> None:
+        table = self.query_one("#drill-table", DataTable)
+        agg: dict[str, list[int]] = {}
+        for imp in self._children:
+            if imp.name in agg:
+                agg[imp.name][0] += imp.self_us
+                agg[imp.name][1] += imp.cumul_us
+                agg[imp.name][2] += 1
+            else:
+                agg[imp.name] = [imp.self_us, imp.cumul_us, 1]
+        rows = [(name, vals[0], vals[1], vals[2]) for name, vals in agg.items()]
+        rows.sort(key=lambda r: r[1], reverse=True)
+        _render_table_rows(table, rows)
+
+    def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
+        table = self.query_one("#drill-table", DataTable)
+        row = table.get_row(event.row_key)
+        module = str(row[0])
+        self_us = int(str(row[1]).strip().replace(",", ""))
+        cumul_us = int(str(row[2]).strip().replace(",", ""))
+        count = int(str(row[3]).strip().replace(",", ""))
+
+        total = sum(imp.self_us for imp in self._children)
+        pct = (self_us / total * 100) if total else 0.0
+        children = _collect_children(self._all_imports, module)
+
+        def _handle_detail(result: str) -> None:
+            if result == "copy":
+                text = f"Module: {module}  Self: {self_us:,}µs ({pct:.1f}%)  Cumul: {cumul_us:,}µs  Imports: {count}"
+                self.app.copy_to_clipboard(text)
+                self.notify(f"Copied {module}")
+            elif result == "drill":
+                if children:
+                    self.app.push_screen(
+                        DrillDownScreen(module, children, self._all_imports)
+                    )
+                else:
+                    self.notify("No sub-imports")
+
+        self.app.push_screen(
+            DetailModal(module, self_us, cumul_us, count, pct, bool(children)),
+            _handle_detail,
+        )
+
+    def action_pop_screen(self) -> None:
+        self.app.pop_screen()
+
+    def action_cursor_down(self) -> None:
+        self.query_one("#drill-table", DataTable).action_cursor_down()
+
+    def action_cursor_up(self) -> None:
+        self.query_one("#drill-table", DataTable).action_cursor_up()
 
 
 class AnalysisScreen(Screen):
@@ -203,32 +422,41 @@ class AnalysisScreen(Screen):
             else:
                 agg[name] = [self_us, cumul_us, 1]
         rows = [(name, vals[0], vals[1], vals[2]) for name, vals in agg.items()]
-        if self.sort_key == "cumul":
-            rows.sort(key=lambda r: r[2], reverse=True)
-        elif self.sort_key == "name":
-            rows.sort(key=lambda r: r[0])
-        else:
+        if self.sort_key == "self":
             rows.sort(key=lambda r: r[1], reverse=True)
-        max_self = max((r[1] for r in rows), default=1) or 1
+        elif self.sort_key == "cumul":
+            rows.sort(key=lambda r: r[2], reverse=True)
+        _render_table_rows(table, rows)
 
-        table.clear(columns=True)
-        table.add_columns("Module", "Self (µs)", "Cumul (µs)", "Imports", "Bar")
-        for name, self_us, cumul_us, count in rows:
-            ratio = self_us / max_self
-            color = _heat_color(ratio)
-            if self_us > 0:
-                log_ratio = math.log1p(self_us) / math.log1p(max_self)
-            else:
-                log_ratio = 0.0
-            bar = "█" * round(log_ratio * MAX_BAR_WIDTH)
-            style = Style(color=color)
-            table.add_row(
-                Text(name, style=style + Style(bold=True)),
-                Text(f"{self_us:>12,}", style=style),
-                Text(f"{cumul_us:>12,}", style=Style(dim=True)),
-                Text(f"{count:>8}", style=Style(dim=True)),
-                Text(bar, style=style),
-            )
+    def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
+        table = self.query_one("#agg-table", DataTable)
+        row = table.get_row(event.row_key)
+        module = str(row[0])
+        self_us = int(str(row[1]).strip().replace(",", ""))
+        cumul_us = int(str(row[2]).strip().replace(",", ""))
+        count = int(str(row[3]).strip().replace(",", ""))
+
+        total = _total_self_us(self._visible_imports())
+        pct = (self_us / total * 100) if total else 0.0
+        children = _collect_children(self._imports, module)
+
+        def _handle_detail(result: str) -> None:
+            if result == "copy":
+                text = f"Module: {module}  Self: {self_us:,}µs ({pct:.1f}%)  Cumul: {cumul_us:,}µs  Imports: {count}"
+                self.app.copy_to_clipboard(text)
+                self.notify(f"Copied {module}")
+            elif result == "drill":
+                if children:
+                    self.app.push_screen(
+                        DrillDownScreen(module, children, self._imports)
+                    )
+                else:
+                    self.notify("No sub-imports")
+
+        self.app.push_screen(
+            DetailModal(module, self_us, cumul_us, count, pct, bool(children)),
+            _handle_detail,
+        )
 
     def action_toggle_filter(self) -> None:
         bar = self.query_one("#filter-bar", Input)
