@@ -24,6 +24,3 @@ dev = [
     "codeflash",
     "ruff>=0.15.2",
 ]
-
-[tool.uv.sources]
-codeflash = { path = "../cf_org/codeflash", editable = true }
