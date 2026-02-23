@@ -100,11 +100,15 @@ def _collect_children(imports: list[Import], module_name: str) -> list[Import]:
     """Walk the full import tree, find every node matching module_name, collect their direct children."""
     children: list[Import] = []
     stack = list(imports)
+    # Cache frequently used list methods to local variables to reduce attribute lookup overhead
+    children_extend = children.extend
+    stack_pop = stack.pop
+    stack_extend = stack.extend
     while stack:
-        node = stack.pop()
+        node = stack_pop()
         if node.name == module_name:
-            children.extend(node.children)
-        stack.extend(node.children)
+            children_extend(node.children)
+        stack_extend(node.children)
     return children
 
 
