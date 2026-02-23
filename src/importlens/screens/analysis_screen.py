@@ -33,12 +33,12 @@ def _heat_color(ratio: float) -> str:
     ratio = max(0.0, min(1.0, ratio))
     if ratio < 0.5:
         t = ratio * 2
-        r = int(0x00 + t * (0xFF - 0x00))
+        r = int(t * 0xFF)
         g = 0xFF
     else:
         t = (ratio - 0.5) * 2
         r = 0xFF
-        g = int(0xFF - t * (0xFF - 0x00))
+        g = int(0xFF - t * 0xFF)
     return f"#{_HEX_PAIRS[r]}{_HEX_PAIRS[g]}00"
 
 
