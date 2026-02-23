@@ -15,6 +15,8 @@ from textual.widgets import Button, DataTable, Footer, Input, Static
 
 from importlens.parser import Import
 
+_HEX_PAIRS = tuple(f"{i:02x}" for i in range(256))
+
 _STDLIB_NAMES = sys.stdlib_module_names
 
 MAX_BAR_WIDTH = 10
@@ -38,7 +40,7 @@ def _heat_color(ratio: float) -> str:
         t = (ratio - 0.5) * 2
         r = 0xFF
         g = int(0xFF - t * (0xFF - 0x00))
-    return f"#{r:02x}{g:02x}00"
+    return f"#{_HEX_PAIRS[r]}{_HEX_PAIRS[g]}00"
 
 
 def _filter_tree(imports: list[Import], filter_text: str) -> list[Import]:
