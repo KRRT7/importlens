@@ -81,10 +81,13 @@ def _count_modules(imports: list[Import]) -> int:
 def _total_self_us(imports: list[Import]) -> int:
     total = 0
     stack = list(imports)
+    # Cache frequently used list methods as locals to avoid repeated attribute lookups in the loop.
+    pop = stack.pop
+    extend = stack.extend
     while stack:
-        node = stack.pop()
+        node = pop()
         total += node.self_us
-        stack.extend(node.children)
+        extend(node.children)
     return total
 
 
