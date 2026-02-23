@@ -7,10 +7,12 @@ from dataclasses import dataclass, field
 # (Python/import.c:4138, function import_find_and_load).  `accumulated` is
 # per-interpreter, not per-thread, so concurrent imports can inflate it beyond
 # `cum`, producing negative values.  We accept them with -?\d+.
-IMPORT_TIME_RE = re.compile(r"^import time:\s+(-?\d+) \|\s+(-?\d+) \|(\s+\S.*)")
+IMPORT_TIME_RE = re.compile(
+    r"^import time:\s+(-?\d+) \|\s+(-?\d+) \|(\s+\S.*)", re.MULTILINE
+)
 
 
-@dataclass
+@dataclass(slots=True)
 class Import:
     name: str
     self_us: int
@@ -22,18 +24,13 @@ def parse(text: str) -> list[Import]:
     root = Import(name="root", self_us=0, cumul_us=0)
     stack: list[Import] = [root]
 
-    for line in reversed(text.splitlines()):
-        m = IMPORT_TIME_RE.match(line)
-        if not m:
-            continue
+    for self_us_s, cumul_us_s, raw_name in reversed(IMPORT_TIME_RE.findall(text)):
+        leading = len(raw_name) - len(raw_name.lstrip())
+        depth = (leading - 1) // 2 + 1
 
-        self_us = int(m[1])
-        cumul_us = int(m[2])
-        raw_name = m[3]
-        name = raw_name.strip()
-        depth = (len(raw_name) - len(raw_name.lstrip()) - 1) // 2 + 1
-
-        node = Import(name=name, self_us=self_us, cumul_us=cumul_us)
+        node = Import(
+            name=raw_name[leading:], self_us=int(self_us_s), cumul_us=int(cumul_us_s)
+        )
 
         while len(stack) > depth:
             stack.pop()
