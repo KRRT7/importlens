@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import math
 import sys
-from copy import copy
 
 from rich.style import Style
 from rich.text import Text
@@ -14,8 +13,6 @@ from textual.timer import Timer
 from textual.widgets import Button, DataTable, Footer, Input, Static
 
 from importlens.parser import Import
-
-_HEX_PAIRS = tuple(f"{i:02x}" for i in range(256))
 
 _STDLIB_NAMES = sys.stdlib_module_names
 
@@ -40,22 +37,26 @@ def _heat_color(ratio: float) -> str:
         t = (ratio - 0.5) * 2
         r = 0xFF
         g = int(0xFF - t * (0xFF - 0x00))
-    return f"#{_HEX_PAIRS[r]}{_HEX_PAIRS[g]}00"
+    return f"#{r:02x}{g:02x}00"
 
 
 def _filter_tree(imports: list[Import], filter_text: str) -> list[Import]:
     """Recursive filter: keep nodes matching name or having matching descendants."""
     if not filter_text:
         return imports
-    result: list[Import] = []
     lower = filter_text.lower()
-    for imp in imports:
-        filtered_children = _filter_tree(imp.children, filter_text)
-        if lower in imp.name.lower() or filtered_children:
-            node = copy(imp)
-            node.children = filtered_children
-            result.append(node)
-    return result
+
+    def _rec(nodes: list[Import]) -> list[Import]:
+        result: list[Import] = []
+        for imp in nodes:
+            filtered_children = _rec(imp.children)
+            imp_name_lower = imp.name.lower()
+            if lower in imp_name_lower or filtered_children:
+                node = Import(imp.name, imp.self_us, imp.cumul_us, filtered_children)
+                result.append(node)
+        return result
+
+    return _rec(imports)
 
 
 def _filter_stdlib(imports: list[Import], show: bool) -> list[Import]:
