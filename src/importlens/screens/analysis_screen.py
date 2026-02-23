@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import math
 import sys
-from copy import copy
 
 from rich.style import Style
 from rich.text import Text
@@ -47,15 +46,19 @@ def _filter_tree(imports: list[Import], filter_text: str) -> list[Import]:
     """Recursive filter: keep nodes matching name or having matching descendants."""
     if not filter_text:
         return imports
-    result: list[Import] = []
     lower = filter_text.lower()
-    for imp in imports:
-        filtered_children = _filter_tree(imp.children, filter_text)
-        if lower in imp.name.lower() or filtered_children:
-            node = copy(imp)
-            node.children = filtered_children
-            result.append(node)
-    return result
+
+    def _rec(nodes: list[Import]) -> list[Import]:
+        result: list[Import] = []
+        for imp in nodes:
+            filtered_children = _rec(imp.children)
+            imp_name_lower = imp.name.lower()
+            if lower in imp_name_lower or filtered_children:
+                node = Import(imp.name, imp.self_us, imp.cumul_us, filtered_children)
+                result.append(node)
+        return result
+
+    return _rec(imports)
 
 
 def _filter_stdlib(imports: list[Import], show: bool) -> list[Import]:
