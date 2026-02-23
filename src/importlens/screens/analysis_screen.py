@@ -90,9 +90,18 @@ def _total_self_us(imports: list[Import]) -> int:
 
 def _flatten_all(imp: Import) -> list[tuple[str, int, int]]:
     """Flatten an import and all its descendants."""
-    result: list[tuple[str, int, int]] = [(imp.name, imp.self_us, imp.cumul_us)]
-    for child in imp.children:
-        result.extend(_flatten_all(child))
+    result: list[tuple[str, int, int]] = []
+    # Iterative pre-order traversal using an explicit stack to avoid
+    # recursion and repeated list concatenations from extend().
+    stack: list[Import] = [imp]
+    while stack:
+        node = stack.pop()
+        result.append((node.name, node.self_us, node.cumul_us))
+        # Push children in reverse order so they are processed in original order.
+        children = node.children
+        if children:
+            for child in reversed(children):
+                stack.append(child)
     return result
 
 
