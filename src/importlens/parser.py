@@ -3,7 +3,11 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
-IMPORT_TIME_RE = re.compile(r"^import time:\s+(\d+) \|\s+(\d+) \|(\s+\S.*)")
+# NOTE: CPython computes self_us as cum - accumulated inline
+# (Python/import.c:4138, function import_find_and_load).  `accumulated` is
+# per-interpreter, not per-thread, so concurrent imports can inflate it beyond
+# `cum`, producing negative values.  We accept them with -?\d+.
+IMPORT_TIME_RE = re.compile(r"^import time:\s+(-?\d+) \|\s+(-?\d+) \|(\s+\S.*)")
 
 
 @dataclass
