@@ -65,7 +65,7 @@ def _filter_stdlib(imports: list[Import], show: bool) -> list[Import]:
     """Filter out top-level stdlib imports when show is False."""
     if show:
         return imports
-    return [imp for imp in imports if imp.name.split(".")[0] not in _STDLIB_NAMES]
+    return [imp for imp in imports if imp.name.partition(".")[0] not in stdlib]
 
 
 def _count_modules(imports: list[Import]) -> int:
